@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Granada GeoGuessr</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const GranadaGeoGuessr = () => {
+      const [gameState, setGameState] = useState("playing");
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(1);
+      const [guessLocation, setGuessLocation] = useState(null);
+      const [currentLocation, setCurrentLocation] = useState(null);
+      const [distance, setDistance] = useState(null);
+
+
+      const locations = [
+        {
+          name: "Alhambra",
+          lat: 37.1760,
+          lng: -3.5881,
+          image: "AlhambraGranada.jpg",
+          hint: "Historic Moorish palace and fortress complex"
+        },
+        {
+          name: "Biodomo Granada",
+          lat: 37.1617,
+          lng: -3.5951,
+          image: "BiodomoGranada.jpg",
+          hint: "Biopark with tropical rainforest environment"
+        },
+        {
+          name: "Granada Cathedral",
+          lat: 37.1758,
+          lng: -3.5986,
+          image: "CathedralGranada.jpg",
+          hint: "Renaissance cathedral in the city center"
+        },
+        {
+          name: "Albaicín",
+          lat: 37.1811,
+          lng: -3.5937,
+          image: "AlbaicinGranada.jpg",
+          hint: "Historic Moorish quarter with narrow winding streets"
+        }
+      ];
+
+      useEffect(() => {
+        selectNewLocation();
+      }, []);
+
+      const selectNewLocation = () => {
+        const randomLocation = locations[Math.floor(Math.random() * locations.length)];
+        setCurrentLocation(randomLocation);
+        setGameState("playing");
+        setGuessLocation(null);
+        setDistance(null);
+      };
+
+      const calculateDistance = (lat1, lng1, lat2, lng2) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) *
+            Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      };
+
+      const calculateScore = (distKm) => {
+        if (distKm < 0.1) return 5000;
+        if (distKm < 0.3) return 4000;
+        if (distKm < 0.5) return 3000;
+        if (distKm < 1) return 2000;
+        if (distKm < 2) return 1000;
+        return 500;
+      };
+
+      const handleMapClick = (e) => {
+        if (gameState !== "playing") return;
+
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Updated visible map bounds matching the Google Maps iframe
+        const maxLat = 37.23;
+        const minLat = 37.12;
+        const minLng = -3.66;
+        const maxLng = -3.54;
+
+        const lat = maxLat - (y / rect.height) * (maxLat - minLat);
+        const lng = minLng + (x / rect.width) * (maxLng - minLng);
+
+        setGuessLocation({ lat, lng, x, y });
+      };
+
+      const submitGuess = () => {
+        if (!guessLocation || !currentLocation) return;
+
+        const dist = calculateDistance(
+          guessLocation.lat,
+          guessLocation.lng,
+          currentLocation.lat,
+          currentLocation.lng
+        );
+
+        const points = calculateScore(dist);
+        setDistance(dist);
+        setScore(score + points);
+        setGameState("revealed");
+      };
+
+      const nextRound = () => {
+        if (round < 5) {
+          setRound(round + 1);
+          selectNewLocation();
+        } else {
+          setGameState("finished");
+        }
+      };
+
+      const resetGame = () => {
+        setScore(0);
+        setRound(1);
+        selectNewLocation();
+      };
+
+      const getLocationPixels = (lat, lng) => {
+        const minLat = 37.12;
+        const maxLat = 37.23;
+        const minLng = -3.66;
+        const maxLng = -3.54;
+
+        const x = ((lng - minLng) / (maxLng - minLng)) * 100;
+        const y = ((maxLat - lat) / (maxLat - minLat)) * 100;
+
+        return { left: `${x}%`, top: `${y}%` };
+      };
+
+      if (gameState === "finished") {
+        return (
+          <div className="w-full h-screen bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">
+                Game Complete!
+              </h2>
+              <div className="text-6xl font-bold text-orange-600 mb-4">
+                {score}
+              </div>
+              <p className="text-xl text-gray-600 mb-8">Total Points</p>
+              <button
+                onClick={resetGame}
+                className="bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-orange-700 transition"
+              >
+                🔄 Play Again
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="w-full h-screen bg-gradient-to-br from-orange-50 to-red-50 flex flex-col">
+          {/* Header */}
+          <div className="bg-white shadow-md p-4">
+            <div className="max-w-6xl mx-auto flex justify-between items-center">
+              <h1 className="text-2xl font-bold text-orange-600">
+                Granada GeoGuessr
+              </h1>
+              <div className="flex gap-6 text-lg">
+                <div className="font-semibold">
+                  Round: <span className="text-orange-600">{round}/5</span>
+                </div>
+                <div className="font-semibold">
+                  Score: <span className="text-orange-600">{score}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col md:flex-row gap-4 p-4 max-w-6xl mx-auto w-full">
+            {/* Location Image */}
+            <div className="flex-1 bg-white rounded-xl shadow-lg overflow-hidden">
+              <div className="h-full flex flex-col">
+                {currentLocation?.image ? (
+                  <img
+                    src={currentLocation.image}
+                    alt={currentLocation?.name}
+                    className="w-full h-4/5 object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-4/5 bg-gradient-to-br from-orange-200 to-red-200 flex items-center justify-center">
+                    <div className="text-center p-8">
+                      <div className="text-6xl mb-4">📍</div>
+                      <p className="text-gray-600 text-lg">
+                        Replace image URL in code
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div className="p-4 bg-white flex-1 flex flex-col justify-center">
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">
+                    Where is this location?
+                  </h3>
+                  <p className="text-gray-600">{currentLocation?.hint}</p>
+                  {gameState === "revealed" && (
+                    <div className="mt-4 p-3 bg-orange-50 rounded-lg">
+                      <p className="font-bold text-lg text-gray-800">
+                        {currentLocation?.name}
+                      </p>
+                      <p className="text-lg font-semibold">
+                        Distance: {distance?.toFixed(2)} km
+                      </p>
+                      <p className="text-orange-600 font-bold text-xl">
+                        +{calculateScore(distance)} points
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Map */}
+            <div className="w-full md:w-96 bg-white rounded-xl shadow-lg p-4">
+              <h3 className="text-lg font-bold mb-2 text-gray-800">
+                Make Your Guess
+              </h3>
+              <div
+                className="relative w-full aspect-square rounded-lg cursor-crosshair border-4 border-gray-300 overflow-hidden"
+                onClick={handleMapClick}
+              >
+                <iframe
+                  width="100%"
+                  height="100%"
+                  frameBorder="0"
+                  style={{ pointerEvents: "none" }}
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d51285!2d-3.60!3d37.175!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd71fce62d32c27d%3A0x9258f79dd3600d7!2sGranada%2C%20Spain!5e0!3m2!1sen!2s!4v1234567890123"
+                ></iframe>
+
+                {/* Overlay to catch clicks */}
+                <div className="absolute inset-0"></div>
+
+                {/* Guess marker */}
+                {guessLocation && (
+                  <div
+                    className="absolute w-6 h-6 bg-blue-600 rounded-full border-3 border-white shadow-lg transform -translate-x-1/2 -translate-y-1/2 z-10"
+                    style={{ left: guessLocation.x, top: guessLocation.y }}
+                  >
+                    <div className="absolute inset-0 bg-blue-600 rounded-full animate-ping opacity-75"></div>
+                  </div>
+                )}
+
+                {/* Actual location marker */}
+                {gameState === "revealed" && currentLocation && (
+                  <div
+                    className="absolute w-6 h-6 bg-red-600 rounded-full border-3 border-white shadow-lg transform -translate-x-1/2 -translate-y-1/2 z-10"
+                    style={getLocationPixels(currentLocation.lat, currentLocation.lng)}
+                  >
+                    <div className="absolute inset-0 bg-red-600 rounded-full animate-ping opacity-75"></div>
+                  </div>
+                )}
+
+                {/* Line between guess and actual */}
+                {gameState === "revealed" && guessLocation && currentLocation && (
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none z-20">
+                    <line
+                      x1={guessLocation.x}
+                      y1={guessLocation.y}
+                      x2={getLocationPixels(currentLocation.lat, currentLocation.lng).left}
+                      y2={getLocationPixels(currentLocation.lat, currentLocation.lng).top}
+                      stroke="#ef4444"
+                      strokeWidth="3"
+                      strokeDasharray="5,5"
+                    />
+                  </svg>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div className="mt-4 flex gap-2">
+                {gameState === "playing" ? (
+                  <button
+                    onClick={submitGuess}
+                    disabled={!guessLocation}
+                    className="flex-1 bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    ✓ Submit Guess
+                  </button>
+                ) : (
+                  <button
+                    onClick={nextRound}
+                    className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+                  >
+                    Next Round →
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3 text-sm text-gray-600 text-center">
+                {gameState === "playing"
+                  ? "Click on the map to place your guess"
+                  : "🔵 Your Guess | 🔴 Actual Location"}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<GranadaGeoGuessr />, document.getElementById("root"));
+  </script>
+</body>
+</html>
